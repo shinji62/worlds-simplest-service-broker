@@ -10,8 +10,11 @@ import (
 	"github.com/cloudfoundry-community/go-cfenv"
 	"github.com/cloudfoundry-community/types-cf"
 	"github.com/go-martini/martini"
-	"github.com/martini-contrib/auth"
 	"github.com/kr/pretty"
+	"github.com/martini-contrib/auth"
+	"io"
+	"io/ioutil"
+	"net/http"
 )
 
 func init() {
@@ -73,12 +76,26 @@ func brokerCatalog() (int, []byte) {
 	return 200, json
 }
 
-func createServiceInstance(params martini.Params) (int, []byte) {
-	serviceID := params["service_id"]
-	fmt.Printf("Creating service instance %s for service %s plan %s\n", serviceID, serviceName, servicePlan)
+func DecodeRequest(r *http.Request) []byte {
+	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
+	if err != nil {
+		panic(err)
+	}
+	defer r.Body.Close()
+	return body
+}
 
+func createServiceInstance(r *http.Request, params martini.Params) (int, []byte) {
+	serviceID := params["service_id"]
+	var serviceCreateResponse cf.ServiceCreationRequest
+	fmt.Printf("Creating service instance %s for service %s plan %s\n", serviceID, serviceName, servicePlan)
+	err := json.Unmarshal(DecodeRequest(r), &serviceCreateResponse)
+	if err != nil {
+		panic(err)
+	}
 	instance := serviceInstanceResponse{DashboardURL: fmt.Sprintf("%s/dashboard", appURL)}
 	json, err := json.Marshal(instance)
+	fmt.Printf("%# v\n", pretty.Formatter(serviceCreateResponse))
 	if err != nil {
 		fmt.Println("Um, how did we fail to marshal this service instance:")
 		fmt.Printf("%# v\n", pretty.Formatter(instance))
